@@ -3,32 +3,44 @@ import pickle
 from typing import Any
 import numpy as np
 import sentence_transformers
-# from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings
 from scipy.spatial.distance import cdist
 
 # DEFAULT_MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
-DEFAULT_MODEL_NAME = "sentence-transformers/msmarco-distilbert-base-tas-b"
 
 
 class VectorIndex:
     """Class to handle vector index."""
-    model_name = DEFAULT_MODEL_NAME
+    DEFAULT_MODEL_NAME = "sentence-transformers/msmarco-distilbert-base-tas-b"
 
-    def __init__(self) -> None:
+    def __init__(self, embedding_model=DEFAULT_MODEL_NAME, device="cpu") -> None:
         self.__vectors: list[list] = []
         self.__datas: list[str] = []
         self.__multi_process = False
         self.show_progress = False
+        self.embedding_model = embedding_model
         # self.embedding: Embeddings = embedding()
         self.client = sentence_transformers.SentenceTransformer(
-            self.model_name, device="mps", cache_folder="embedding_model_cache")
+            self.embedding_model, device=device, cache_folder="__embedding_model_cache__")
 
-    def add(self, text: str, metadata: dict = {}):
+    @property
+    def vectors(self):
+        """Return embedding vectors array."""
+        return self.__vectors
+
+    @property
+    def datas(self):
+        "Return datas array."
+        return self.__datas
+
+    def add(self, text: str, metadata: dict = None):
         """Add text to the db."""
-        metadata["__text"] = text
+        data = {
+            "text": text,
+            "metadata": metadata
+        }
         vec = self.__embed_query(text)
         self.__vectors.append(vec)
-        self.__datas.append(metadata)
+        self.__datas.append(data)
 
     def search(self, text: str, k: int = 5):
         """Search db for record"""
@@ -36,8 +48,8 @@ class VectorIndex:
         distances = cdist(np.expand_dims(qvec, axis=0),
                           self.__vectors, 'euclidean')
         indices = np.argsort(distances)[0][:k]
-        texts = np.array(self.__datas)[indices]
-        return list(zip(texts, distances[0][indices], indices))
+        datas = np.array(self.__datas)[indices]
+        return list(zip(datas, distances[0][indices], indices))
 
     def delete(self, index: int):
         """Delete a record by index from the db."""
